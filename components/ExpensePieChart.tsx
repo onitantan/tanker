@@ -13,6 +13,7 @@ type Transaction = {
 
 type ExpensePieChartProps = {
   transactions: Transaction[];
+  viewMode: 'daily' | 'monthly' | 'yearly';
 };
 
 // Tailwindのカラーパレットから見やすい色を選択
@@ -36,14 +37,15 @@ const COLORS = [
 ];
 
 // カスタムツールチップ
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload, viewMode }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0];
+    const unit = viewMode === 'daily' ? '日' : viewMode === 'monthly' ? '月' : '年';
     return (
       <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
         <p className="font-bold text-slate-800">{data.name}</p>
         <p className="text-sm text-slate-600">
-          {Math.abs(data.value).toLocaleString()}円/日
+          {Math.abs(data.value).toLocaleString()}円/{unit}
         </p>
       </div>
     );
@@ -69,13 +71,32 @@ const renderCustomLegend = (props: any) => {
   );
 };
 
-export default function ExpensePieChart({ transactions }: ExpensePieChartProps) {
-  // 支出のみをフィルタリングし、dailyValueの絶対値を使用
+export default function ExpensePieChart({
+  transactions,
+  viewMode,
+}: ExpensePieChartProps) {
+  // 期間に応じた倍率を計算
+  const getMultiplier = () => {
+    if (viewMode === 'daily') return 1;
+    if (viewMode === 'monthly') return 30;
+    return 365; // yearly
+  };
+
+  const multiplier = getMultiplier();
+
+  // 期間に応じた単位ラベル
+  const getUnitLabel = () => {
+    if (viewMode === 'daily') return '1日あたり';
+    if (viewMode === 'monthly') return '1ヶ月あたり';
+    return '1年あたり';
+  };
+
+  // 支出のみをフィルタリングし、期間に応じた値を使用
   const expenseData = transactions
     .filter((item) => item.type === 'expense')
     .map((item) => ({
       name: item.name,
-      value: Math.abs(item.dailyValue), // 負の値を正の値に変換
+      value: Math.abs(item.dailyValue) * multiplier, // 期間に応じた値に変換
     }));
 
   // データがない場合は何も表示しない
@@ -86,7 +107,7 @@ export default function ExpensePieChart({ transactions }: ExpensePieChartProps) 
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
       <h3 className="text-sm font-bold text-slate-700 mb-4 text-center">
-        支出の内訳（1日あたり）
+        支出の内訳（{getUnitLabel()}）
       </h3>
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
@@ -107,7 +128,7 @@ export default function ExpensePieChart({ transactions }: ExpensePieChartProps) 
               />
             ))}
           </Pie>
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
           <Legend content={renderCustomLegend} />
         </PieChart>
       </ResponsiveContainer>

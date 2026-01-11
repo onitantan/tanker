@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import ExpensePieChart from '@/components/ExpensePieChart';
+import IncomeExpenseBarChart from '@/components/IncomeExpenseBarChart';
 
 // 型定義（データベースから取得する型）
 type TransactionDB = {
@@ -18,8 +19,11 @@ type Transaction = TransactionDB & {
   dailyValue: number;
 };
 
+type ViewMode = 'daily' | 'monthly' | 'yearly';
+
 export default function Home() {
   const [items, setItems] = useState<Transaction[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('daily');
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -140,26 +144,103 @@ export default function Home() {
     }
   };
 
-  const totalDailyBalance = items.reduce((acc, item) => acc + item.dailyValue, 0);
+  // 期間に応じた倍率を計算
+  const getMultiplier = () => {
+    if (viewMode === 'daily') return 1;
+    if (viewMode === 'monthly') return 30;
+    return 365; // yearly
+  };
+
+  // 期間に応じた合計額を計算
+  const getTotalBalance = () => {
+    const multiplier = getMultiplier();
+    return items.reduce((acc, item) => acc + item.dailyValue * multiplier, 0);
+  };
+
+  // 期間に応じた表示値を計算
+  const getDisplayValue = (dailyValue: number) => {
+    const multiplier = getMultiplier();
+    return dailyValue * multiplier;
+  };
+
+  // 期間に応じたラベルを取得
+  const getBalanceLabel = () => {
+    if (viewMode === 'daily') return "Today's Balance";
+    if (viewMode === 'monthly') return "Monthly Balance";
+    return "Yearly Balance";
+  };
+
+  // 期間に応じた単位ラベルを取得
+  const getUnitLabel = () => {
+    if (viewMode === 'daily') return '1日あたりの収支';
+    if (viewMode === 'monthly') return '1ヶ月あたりの収支';
+    return '1年あたりの収支';
+  };
+
+  const totalBalance = getTotalBalance();
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 font-sans text-gray-900">
-      <main className="max-w-md mx-auto space-y-8">
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold text-slate-800">Tanker</h1>
-          <p className="text-slate-500">今日の生存コストを可視化</p>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-900">
+      <main className="max-w-4xl mx-auto space-y-6">
+        {/* タイトルと期間切り替えタブ */}
+        <div className="text-center space-y-4">
+          <div>
+            <h1 className="text-4xl font-bold text-slate-800">Tanker</h1>
+            <p className="text-slate-500 mt-2">今日の生存コストを可視化</p>
+          </div>
+          
+          {/* 期間切り替えタブ */}
+          <div className="flex justify-center gap-2">
+            <button
+              onClick={() => setViewMode('daily')}
+              className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+                viewMode === 'daily'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              日次
+            </button>
+            <button
+              onClick={() => setViewMode('monthly')}
+              className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+                viewMode === 'monthly'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              月次
+            </button>
+            <button
+              onClick={() => setViewMode('yearly')}
+              className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+                viewMode === 'yearly'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              年次
+            </button>
+          </div>
         </div>
 
+        {/* Balance表示 */}
         <div className="bg-white p-8 rounded-2xl shadow-lg text-center border border-slate-100">
-          <h2 className="text-xs font-bold text-slate-400 uppercase mb-2">Today's Balance</h2>
-          <div className={`text-5xl font-black ${totalDailyBalance >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-            {totalDailyBalance >= 0 ? '+' : ''}{Math.round(totalDailyBalance).toLocaleString()}
+          <h2 className="text-xs font-bold text-slate-400 uppercase mb-2">
+            {getBalanceLabel()}
+          </h2>
+          <div className={`text-5xl font-black ${totalBalance >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+            {totalBalance >= 0 ? '+' : ''}{Math.round(totalBalance).toLocaleString()}
             <span className="text-xl text-slate-400 ml-1">円</span>
           </div>
-          <p className="text-xs text-slate-400 mt-2">1日あたりの収支</p>
+          <p className="text-xs text-slate-400 mt-2">{getUnitLabel()}</p>
         </div>
 
-        <ExpensePieChart transactions={items} />
+        {/* グラフエリア */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <IncomeExpenseBarChart transactions={items} viewMode={viewMode} />
+          <ExpensePieChart transactions={items} viewMode={viewMode} />
+        </div>
 
         <form onSubmit={handleAddItem} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -222,7 +303,9 @@ export default function Home() {
                 <p className="text-xs text-slate-400">{item.amount.toLocaleString()}円 ({item.frequency})</p>
               </div>
               <div className={`font-bold mr-4 ${item.dailyValue >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                {Math.round(item.dailyValue).toLocaleString()}円/日
+                {item.dailyValue >= 0 ? '+' : ''}
+                {Math.round(getDisplayValue(item.dailyValue)).toLocaleString()}円
+                {viewMode === 'daily' ? '/日' : viewMode === 'monthly' ? '/月' : '/年'}
               </div>
               <button
                 onClick={() => handleDeleteItem(item.id)}
