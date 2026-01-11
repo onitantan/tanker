@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import ExpensePieChart from '@/components/ExpensePieChart';
 
 // 型定義（データベースから取得する型）
 type TransactionDB = {
@@ -157,6 +158,8 @@ export default function Home() {
           </div>
           <p className="text-xs text-slate-400 mt-2">1日あたりの収支</p>
         </div>
+
+        <ExpensePieChart transactions={items} />
 
         <form onSubmit={handleAddItem} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
           <div className="grid grid-cols-2 gap-4">
