@@ -7,40 +7,35 @@ type Transaction = {
   name: string;
   amount: number;
   type: 'income' | 'expense';
-  frequency: 'daily' | 'monthly' | 'yearly';
+  frequency: 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   dailyValue: number;
+  category?: 'consumption' | 'waste' | 'investment' | null;
 };
 
 type ExpensePieChartProps = {
   transactions: Transaction[];
-  viewMode: 'daily' | 'monthly' | 'yearly';
+  viewMode: 'daily' | 'weekly' | 'monthly' | 'yearly';
 };
 
-// Tailwindのカラーパレットから見やすい色を選択
-const COLORS = [
-  '#ef4444', // red-500
-  '#f97316', // orange-500
-  '#f59e0b', // amber-500
-  '#eab308', // yellow-500
-  '#84cc16', // lime-500
-  '#22c55e', // green-500
-  '#10b981', // emerald-500
-  '#14b8a6', // teal-500
-  '#06b6d4', // cyan-500
-  '#3b82f6', // blue-500
-  '#6366f1', // indigo-500
-  '#8b5cf6', // violet-500
-  '#a855f7', // purple-500
-  '#d946ef', // fuchsia-500
-  '#ec4899', // pink-500
-  '#f43f5e', // rose-500
-];
+// 分類ごとの色定義
+const CATEGORY_COLORS: Record<string, string> = {
+  consumption: '#3b82f6', // blue-500 (消費)
+  waste: '#ef4444', // red-500 (浪費)
+  investment: '#22c55e', // green-500 (投資)
+};
+
+// 分類ごとのラベル
+const CATEGORY_LABELS: Record<string, string> = {
+  consumption: '💧 消費',
+  waste: '⚠️ 浪費',
+  investment: '🌱 投資',
+};
 
 // カスタムツールチップ
 const CustomTooltip = ({ active, payload, viewMode }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0];
-    const unit = viewMode === 'daily' ? '日' : viewMode === 'monthly' ? '月' : '年';
+    const unit = viewMode === 'daily' ? '日' : viewMode === 'weekly' ? '週' : viewMode === 'monthly' ? '月' : '年';
     return (
       <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
         <p className="font-bold text-slate-800">{data.name}</p>
@@ -78,6 +73,7 @@ export default function ExpensePieChart({
   // 期間に応じた倍率を計算
   const getMultiplier = () => {
     if (viewMode === 'daily') return 1;
+    if (viewMode === 'weekly') return 7;
     if (viewMode === 'monthly') return 30;
     return 365; // yearly
   };
@@ -87,16 +83,35 @@ export default function ExpensePieChart({
   // 期間に応じた単位ラベル
   const getUnitLabel = () => {
     if (viewMode === 'daily') return '1日あたり';
+    if (viewMode === 'weekly') return '1週間あたり';
     if (viewMode === 'monthly') return '1ヶ月あたり';
     return '1年あたり';
   };
 
-  // 支出のみをフィルタリングし、期間に応じた値を使用
-  const expenseData = transactions
-    .filter((item) => item.type === 'expense')
-    .map((item) => ({
-      name: item.name,
-      value: Math.abs(item.dailyValue) * multiplier, // 期間に応じた値に変換
+  // 支出のみをフィルタリングし、分類ごとに集計
+  const expenseTransactions = transactions.filter((item) => item.type === 'expense');
+  
+  // 分類ごとに集計
+  const categoryTotals: Record<string, number> = {
+    consumption: 0,
+    waste: 0,
+    investment: 0,
+  };
+
+  expenseTransactions.forEach((item) => {
+    const category = item.category || 'consumption'; // デフォルトは消費
+    if (categoryTotals.hasOwnProperty(category)) {
+      categoryTotals[category] += Math.abs(item.dailyValue) * multiplier;
+    }
+  });
+
+  // グラフ用データに変換
+  const expenseData = Object.entries(categoryTotals)
+    .filter(([_, value]) => value > 0) // 値が0より大きいもののみ
+    .map(([category, value]) => ({
+      name: CATEGORY_LABELS[category],
+      value: value,
+      category: category,
     }));
 
   // データがない場合は何も表示しない
@@ -124,7 +139,7 @@ export default function ExpensePieChart({
             {expenseData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={COLORS[index % COLORS.length]}
+                fill={CATEGORY_COLORS[entry.category] || '#94a3b8'}
               />
             ))}
           </Pie>

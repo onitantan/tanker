@@ -7,13 +7,14 @@ type Transaction = {
   name: string;
   amount: number;
   type: 'income' | 'expense';
-  frequency: 'daily' | 'monthly' | 'yearly';
+  frequency: 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   dailyValue: number;
+  category?: 'consumption' | 'waste' | 'investment' | null;
 };
 
 type IncomeExpenseBarChartProps = {
   transactions: Transaction[];
-  viewMode: 'daily' | 'monthly' | 'yearly';
+  viewMode: 'daily' | 'weekly' | 'monthly' | 'yearly';
 };
 
 // カスタムツールチップ
@@ -40,19 +41,20 @@ export default function IncomeExpenseBarChart({
   // 期間に応じた倍率を計算
   const getMultiplier = () => {
     if (viewMode === 'daily') return 1;
+    if (viewMode === 'weekly') return 7;
     if (viewMode === 'monthly') return 30;
     return 365; // yearly
   };
 
   const multiplier = getMultiplier();
 
-  // 収入と支出を集計
+  // 収入と支出を集計（one_timeは除外）
   const incomeTotal = transactions
-    .filter((item) => item.type === 'income')
+    .filter((item) => item.type === 'income' && item.frequency !== 'one_time')
     .reduce((acc, item) => acc + item.dailyValue * multiplier, 0);
 
   const expenseTotal = transactions
-    .filter((item) => item.type === 'expense')
+    .filter((item) => item.type === 'expense' && item.frequency !== 'one_time')
     .reduce((acc, item) => acc + Math.abs(item.dailyValue) * multiplier, 0);
 
   const data = [

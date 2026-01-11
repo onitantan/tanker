@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import ExpensePieChart from '@/components/ExpensePieChart';
 import IncomeExpenseBarChart from '@/components/IncomeExpenseBarChart';
+import AssetTrendChart from '@/components/AssetTrendChart';
+import DailyTrendChart from '@/components/DailyTrendChart';
+import ProfitLossStatement from '@/components/ProfitLossStatement';
+import BalanceSheet from '@/components/BalanceSheet';
 
 // 型定義（データベースから取得する型）
 type TransactionDB = {
@@ -11,7 +15,9 @@ type TransactionDB = {
   name: string;
   amount: number;
   type: 'income' | 'expense';
-  frequency: 'daily' | 'monthly' | 'yearly';
+  frequency: 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  category?: 'consumption' | 'waste' | 'investment' | null;
+  created_at?: string;
 };
 
 // 表示用の型（dailyValueを追加）
@@ -19,25 +25,43 @@ type Transaction = TransactionDB & {
   dailyValue: number;
 };
 
-type ViewMode = 'daily' | 'monthly' | 'yearly';
+type ViewMode = 'daily' | 'weekly' | 'monthly' | 'yearly';
+type TabMode = 'dashboard' | 'analytics';
 
 export default function Home() {
   const [items, setItems] = useState<Transaction[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
+  const [tabMode, setTabMode] = useState<TabMode>('dashboard');
+  const [initialAsset, setInitialAsset] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tanker_initial_asset');
+      return saved ? parseInt(saved, 10) : 0;
+    }
+    return 0;
+  });
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
     type: 'expense',
-    frequency: 'monthly',
+    frequency: 'one_time',
+    category: 'consumption' as 'consumption' | 'waste' | 'investment' | null,
+    date: new Date().toISOString().split('T')[0], // デフォルトは今日
   });
 
-  // 日割り計算
+  // 日割り計算（one_timeは将来予測には含めないため0、ただしその日の集計には使う）
   const calculateDailyValue = (amount: number, frequency: string, type: string) => {
     let dailyVal = 0;
-    if (frequency === 'daily') dailyVal = amount;
+    if (frequency === 'one_time') dailyVal = 0; // 将来予測には含めない
+    else if (frequency === 'daily') dailyVal = amount;
+    else if (frequency === 'weekly') dailyVal = amount / 7;
     else if (frequency === 'monthly') dailyVal = amount / 30;
     else if (frequency === 'yearly') dailyVal = amount / 365;
     return type === 'expense' ? -dailyVal : dailyVal;
+  };
+
+  // 実際の金額を取得（one_timeも含む）
+  const getActualAmount = (amount: number, frequency: string, type: string) => {
+    return type === 'expense' ? -amount : amount;
   };
 
   // データベースから取得したデータを表示用の型に変換
@@ -55,7 +79,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from('transactions')
           .select('*')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: true });
 
         if (error) {
           console.error('Error fetching transactions:', error);
@@ -81,17 +105,27 @@ export default function Home() {
     const amountNum = parseInt(formData.amount);
 
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .insert([
-          {
-            name: formData.name,
-            amount: amountNum,
-            type: formData.type,
-            frequency: formData.frequency,
-          },
-        ])
-        .select();
+        const insertData: any = {
+          name: formData.name,
+          amount: amountNum,
+          type: formData.type,
+          frequency: formData.frequency,
+        };
+        
+        // 支出の場合のみcategoryを追加
+        if (formData.type === 'expense' && formData.category) {
+          insertData.category = formData.category;
+        }
+
+        // One-timeの場合、指定された日付をcreated_atとして使用
+        if (formData.frequency === 'one_time' && formData.date) {
+          insertData.created_at = new Date(formData.date).toISOString();
+        }
+
+        const { data, error } = await supabase
+          .from('transactions')
+          .insert([insertData])
+          .select();
 
       if (error) {
         console.error('Error inserting transaction:', error);
@@ -103,7 +137,7 @@ export default function Home() {
         const { data: allData, error: fetchError } = await supabase
           .from('transactions')
           .select('*')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: true });
 
         if (!fetchError && allData) {
           const transformedData = allData.map(transformTransaction);
@@ -111,7 +145,13 @@ export default function Home() {
         }
       }
 
-      setFormData({ ...formData, name: '', amount: '' });
+      setFormData({ 
+        ...formData, 
+        name: '', 
+        amount: '',
+        category: formData.type === 'expense' ? 'consumption' : null,
+        date: new Date().toISOString().split('T')[0], // リセット時は今日に戻す
+      });
     } catch (error) {
       console.error('Error:', error);
     }
@@ -147,14 +187,17 @@ export default function Home() {
   // 期間に応じた倍率を計算
   const getMultiplier = () => {
     if (viewMode === 'daily') return 1;
+    if (viewMode === 'weekly') return 7;
     if (viewMode === 'monthly') return 30;
     return 365; // yearly
   };
 
-  // 期間に応じた合計額を計算
+  // 期間に応じた合計額を計算（one_timeは除外）
   const getTotalBalance = () => {
     const multiplier = getMultiplier();
-    return items.reduce((acc, item) => acc + item.dailyValue * multiplier, 0);
+    return items
+      .filter((item) => item.frequency !== 'one_time')
+      .reduce((acc, item) => acc + item.dailyValue * multiplier, 0);
   };
 
   // 期間に応じた表示値を計算
@@ -166,6 +209,7 @@ export default function Home() {
   // 期間に応じたラベルを取得
   const getBalanceLabel = () => {
     if (viewMode === 'daily') return "Today's Balance";
+    if (viewMode === 'weekly') return "Weekly Balance";
     if (viewMode === 'monthly') return "Monthly Balance";
     return "Yearly Balance";
   };
@@ -173,6 +217,7 @@ export default function Home() {
   // 期間に応じた単位ラベルを取得
   const getUnitLabel = () => {
     if (viewMode === 'daily') return '1日あたりの収支';
+    if (viewMode === 'weekly') return '1週間あたりの収支';
     if (viewMode === 'monthly') return '1ヶ月あたりの収支';
     return '1年あたりの収支';
   };
@@ -182,18 +227,43 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-900">
       <main className="max-w-4xl mx-auto space-y-6">
-        {/* タイトルと期間切り替えタブ */}
-        <div className="text-center space-y-4">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-800">Tanker</h1>
-            <p className="text-slate-500 mt-2">今日の生存コストを可視化</p>
-          </div>
-          
-          {/* 期間切り替えタブ */}
-          <div className="flex justify-center gap-2">
+        {/* タイトル */}
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-slate-800">Tanker</h1>
+          <p className="text-slate-500 mt-2">個人の財務管理ツール</p>
+        </div>
+
+        {/* ダッシュボード/推移の切り替えタブ */}
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => setTabMode('dashboard')}
+            className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+              tabMode === 'dashboard'
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            Dashboard (入力・現状)
+          </button>
+          <button
+            onClick={() => setTabMode('analytics')}
+            className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+              tabMode === 'analytics'
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            Analytics (分析)
+          </button>
+        </div>
+
+        {tabMode === 'dashboard' ? (
+          <>
+            {/* 期間切り替えタブ */}
+            <div className="flex justify-center gap-2 flex-wrap">
             <button
               onClick={() => setViewMode('daily')}
-              className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+              className={`px-4 py-2 rounded-lg font-bold transition-colors text-sm ${
                 viewMode === 'daily'
                   ? 'bg-slate-900 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -202,8 +272,18 @@ export default function Home() {
               日次
             </button>
             <button
+              onClick={() => setViewMode('weekly')}
+              className={`px-4 py-2 rounded-lg font-bold transition-colors text-sm ${
+                viewMode === 'weekly'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              週次
+            </button>
+            <button
               onClick={() => setViewMode('monthly')}
-              className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+              className={`px-4 py-2 rounded-lg font-bold transition-colors text-sm ${
                 viewMode === 'monthly'
                   ? 'bg-slate-900 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -213,7 +293,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => setViewMode('yearly')}
-              className={`px-6 py-2 rounded-lg font-bold transition-colors ${
+              className={`px-4 py-2 rounded-lg font-bold transition-colors text-sm ${
                 viewMode === 'yearly'
                   ? 'bg-slate-900 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -222,9 +302,8 @@ export default function Home() {
               年次
             </button>
           </div>
-        </div>
 
-        {/* Balance表示 */}
+          {/* Balance表示 */}
         <div className="bg-white p-8 rounded-2xl shadow-lg text-center border border-slate-100">
           <h2 className="text-xs font-bold text-slate-400 uppercase mb-2">
             {getBalanceLabel()}
@@ -271,7 +350,14 @@ export default function Home() {
               <select
                 className="w-full p-2 border rounded-lg bg-white"
                 value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                onChange={(e) => {
+                  const newType = e.target.value as 'income' | 'expense';
+                  setFormData({ 
+                    ...formData, 
+                    type: newType,
+                    category: newType === 'expense' ? formData.category || 'consumption' : null,
+                  });
+                }}
               >
                 <option value="expense">支出</option>
                 <option value="income">収入</option>
@@ -284,12 +370,75 @@ export default function Home() {
                 value={formData.frequency}
                 onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
               >
-                <option value="daily">毎日</option>
-                <option value="monthly">毎月</option>
-                <option value="yearly">毎年</option>
+                <option value="one_time">One-time (今回のみ)</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
               </select>
             </div>
           </div>
+
+          {/* One-timeの場合、日付指定を表示 */}
+          {formData.frequency === 'one_time' && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">日付</label>
+              <input
+                type="date"
+                className="w-full p-2 border rounded-lg"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              />
+            </div>
+          )}
+          
+          {/* 支出の場合のみ分類を表示 */}
+          {formData.type === 'expense' && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-2">分類</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, category: 'consumption' })}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    formData.category === 'consumption'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-slate-200 bg-white hover:border-blue-300'
+                  }`}
+                >
+                  <div className="text-lg mb-1">💧</div>
+                  <div className="text-xs font-bold text-slate-700">消費</div>
+                  <div className="text-xs text-slate-500 mt-1">Consumption</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, category: 'waste' })}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    formData.category === 'waste'
+                      ? 'border-red-500 bg-red-50'
+                      : 'border-slate-200 bg-white hover:border-red-300'
+                  }`}
+                >
+                  <div className="text-lg mb-1">⚠️</div>
+                  <div className="text-xs font-bold text-slate-700">浪費</div>
+                  <div className="text-xs text-slate-500 mt-1">Waste</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, category: 'investment' })}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    formData.category === 'investment'
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-slate-200 bg-white hover:border-green-300'
+                  }`}
+                >
+                  <div className="text-lg mb-1">🌱</div>
+                  <div className="text-xs font-bold text-slate-700">投資</div>
+                  <div className="text-xs text-slate-500 mt-1">Investment</div>
+                </button>
+              </div>
+            </div>
+          )}
           <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-lg font-bold">
             追加
           </button>
@@ -303,9 +452,19 @@ export default function Home() {
                 <p className="text-xs text-slate-400">{item.amount.toLocaleString()}円 ({item.frequency})</p>
               </div>
               <div className={`font-bold mr-4 ${item.dailyValue >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                {item.dailyValue >= 0 ? '+' : ''}
-                {Math.round(getDisplayValue(item.dailyValue)).toLocaleString()}円
-                {viewMode === 'daily' ? '/日' : viewMode === 'monthly' ? '/月' : '/年'}
+                {item.frequency === 'one_time' ? (
+                  <>
+                    {item.type === 'expense' ? '-' : '+'}
+                    {item.amount.toLocaleString()}円
+                    <span className="text-xs text-slate-400 ml-1">(今回のみ)</span>
+                  </>
+                ) : (
+                  <>
+                    {item.dailyValue >= 0 ? '+' : ''}
+                    {Math.round(getDisplayValue(item.dailyValue)).toLocaleString()}円
+                    {viewMode === 'daily' ? '/日' : viewMode === 'weekly' ? '/週' : viewMode === 'monthly' ? '/月' : '/年'}
+                  </>
+                )}
               </div>
               <button
                 onClick={() => handleDeleteItem(item.id)}
@@ -330,6 +489,34 @@ export default function Home() {
             </div>
           ))}
         </div>
+          </>
+        ) : (
+          <>
+            {/* 推移タブの内容 */}
+            <div className="space-y-6">
+              {/* グラフエリア */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <AssetTrendChart transactions={items} initialAsset={initialAsset} />
+                <DailyTrendChart transactions={items} />
+              </div>
+
+              {/* PL/BSエリア */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <ProfitLossStatement transactions={items} />
+                <BalanceSheet
+                  transactions={items}
+                  initialAsset={initialAsset}
+                  onInitialAssetChange={(value) => {
+                    setInitialAsset(value);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('tanker_initial_asset', value.toString());
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
