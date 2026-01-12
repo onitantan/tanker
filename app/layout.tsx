@@ -32,9 +32,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      {/* スマホ用レイアウト：背景グレー、中央寄せ、最大幅固定 */}
-      <body className={`${inter.className} overflow-x-hidden bg-gray-50 text-gray-900 antialiased`}>
-        <div className="mx-auto min-h-screen max-w-md bg-white shadow-xl overflow-hidden">
+      {/* レスポンシブレイアウト：PCでは広く、スマホでは適切な幅 */}
+      <body className={`${inter.className} overflow-x-hidden bg-transparent text-gray-900 antialiased`}>
+        {/* max-w-md を削除し、各ページで個別に制御 */}
+        <div className="min-h-screen">
           {children}
         </div>
       </body>
