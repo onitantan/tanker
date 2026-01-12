@@ -131,7 +131,7 @@ export default function AssetTrendChart({
           <XAxis dataKey="date" />
           <YAxis />
           <Tooltip
-            formatter={(value: number) => [`${value.toLocaleString()}円`, '資産']}
+            formatter={(value: number | undefined) => [`${(value ?? 0).toLocaleString()}円`, '資産']}
             labelStyle={{ color: '#1e293b' }}
           />
           <Legend />

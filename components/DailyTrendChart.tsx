@@ -99,11 +99,13 @@ export default function DailyTrendChart({ transactions }: DailyTrendChartProps) 
           <XAxis dataKey="date" />
           <YAxis />
           <Tooltip
-            formatter={(value: number, name: string) => {
-              if (name === 'expense') {
-                return [`${Math.abs(value).toLocaleString()}円`, '支出'];
+            formatter={(value: any, name: any) => {
+              const numValue = value ?? 0;
+              const nameStr = name ?? '';
+              if (nameStr === 'expense') {
+                return [`${Math.abs(numValue).toLocaleString()}円`, '支出'];
               }
-              return [`${value.toLocaleString()}円`, name === 'income' ? '収入' : '収支'];
+              return [`${numValue.toLocaleString()}円`, nameStr === 'income' ? '収入' : '収支'];
             }}
             labelStyle={{ color: '#1e293b' }}
           />
