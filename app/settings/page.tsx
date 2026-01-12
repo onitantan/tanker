@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import LiquidTankBackground from '@/components/LiquidTankBackground';
 
 type UserSettings = {
   user_id: string;
   initial_asset: number;
   daily_budget_goal: number;
+  target_asset?: number;
   currency_unit: string;
 };
 
@@ -16,20 +18,25 @@ export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
-  const [userId, setUserId] = useState<string>('default');
+  // デフォルトユーザーID（UUID形式）
+  const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000000';
+  
+  const [userId, setUserId] = useState<string>(DEFAULT_USER_ID);
   const [settings, setSettings] = useState<UserSettings>({
-    user_id: 'default',
+    user_id: DEFAULT_USER_ID,
     initial_asset: 0,
     daily_budget_goal: 3000,
+    target_asset: 10000000, // デフォルト: 1000万
     currency_unit: '円',
   });
+  const [currentAsset, setCurrentAsset] = useState<number>(0);
 
   // ユーザーIDを取得
   useEffect(() => {
     const fetchUserId = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        const currentUserId = user?.id || 'default';
+        const currentUserId = user?.id || DEFAULT_USER_ID;
         setUserId(currentUserId);
         setSettings(prev => ({ ...prev, user_id: currentUserId }));
       } catch (error) {
@@ -69,30 +76,92 @@ export default function SettingsPage() {
     }
   }, [userId]);
 
+  // 現在の資産額を計算（初期資産 + 全取引の合計）
+  useEffect(() => {
+    const fetchCurrentAsset = async () => {
+      try {
+        const { data: transactions, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching transactions:', error);
+          return;
+        }
+
+        if (transactions) {
+          const totalTransactionBalance = transactions.reduce((acc, item) => {
+            const actualAmount = item.type === 'expense' ? -item.amount : item.amount;
+            return acc + actualAmount;
+          }, 0);
+          setCurrentAsset(settings.initial_asset + totalTransactionBalance);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    };
+
+    if (settings.initial_asset !== undefined) {
+      fetchCurrentAsset();
+    }
+  }, [settings.initial_asset]);
+
   // 設定を保存
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { error } = await supabase
+      // 現在のユーザー情報を取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      // エラーハンドリングを強化
+      if (userError) {
+        console.error('Error fetching user:', userError);
+        console.error('User error details:', JSON.stringify(userError, null, 2));
+      }
+
+      // ユーザーIDを決定（認証ユーザーがいない場合はUUID形式のダミーIDを使用）
+      const currentUserId = user?.id || DEFAULT_USER_ID;
+
+      // upsertのデータに必ずuser_idを含める（★ここが超重要）
+      const upsertData = {
+        user_id: currentUserId, // 明示的にuser_idを設定
+        initial_asset: Number(settings.initial_asset) || 0,
+        daily_budget_goal: Number(settings.daily_budget_goal) || 3000,
+            target_asset: Number(settings.target_asset) || 10000000, // デフォルト: 1000万
+        currency_unit: settings.currency_unit || '円',
+      };
+
+      console.log('Saving settings with data:', upsertData);
+
+      const { data: upsertResult, error } = await supabase
         .from('user_settings')
-        .upsert(
-          {
-            user_id: userId,
-            initial_asset: settings.initial_asset,
-            daily_budget_goal: settings.daily_budget_goal,
-            currency_unit: settings.currency_unit,
-          },
-          { onConflict: 'user_id' }
-        );
+        .upsert(upsertData, { onConflict: 'user_id' })
+        .select();
 
       if (error) {
         console.error('Error saving settings:', error);
-        alert('設定の保存に失敗しました');
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error hint:', error.hint);
+        
+        // より詳細なエラーメッセージを表示
+        let errorMessage = '設定の保存に失敗しました';
+        if (error.message) {
+          errorMessage += `: ${error.message}`;
+        }
+        if (error.hint) {
+          errorMessage += ` (ヒント: ${error.hint})`;
+        }
+        alert(errorMessage);
         setLoading(false);
         return;
       }
+
+      console.log('Settings saved successfully:', upsertResult);
 
       // 成功通知
       setShowToast(true);
@@ -102,15 +171,22 @@ export default function SettingsPage() {
 
       setLoading(false);
     } catch (error) {
-      console.error('Error:', error);
-      alert('設定の保存に失敗しました');
+      console.error('Unexpected error:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      alert('設定の保存に失敗しました: ' + (error instanceof Error ? error.message : 'Unknown error'));
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-900">
-      <main className="max-w-2xl mx-auto space-y-6">
+    <div className="min-h-screen bg-transparent p-4 md:p-8 font-sans text-gray-900 relative">
+      {/* Liquid Tank Background - 設定画面にも背景を表示 */}
+      <LiquidTankBackground
+        currentAsset={currentAsset}
+        targetAsset={settings.target_asset || 10000000}
+        isNegative={currentAsset < 0}
+      />
+      <main className="max-w-2xl mx-auto space-y-6 relative z-10">
         {/* ヘッダー */}
         <div className="flex items-center justify-between">
           <Link
@@ -195,6 +271,25 @@ export default function SettingsPage() {
               }
               placeholder="3000"
             />
+          </div>
+
+          {/* 目標資産 */}
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-slate-700">
+              🏆 目標資産 (Goal)
+            </label>
+            <input
+              type="number"
+              className="w-full p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={settings.target_asset || ''}
+              onChange={(e) =>
+                setSettings({ ...settings, target_asset: parseInt(e.target.value) || 0 })
+              }
+              placeholder="1000000"
+            />
+            <p className="text-xs text-slate-500">
+              タンクが満タンになる金額です。
+            </p>
           </div>
 
           {/* 通貨単位（将来的な拡張のため） */}

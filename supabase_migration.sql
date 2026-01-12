@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id TEXT PRIMARY KEY,
   initial_asset NUMERIC DEFAULT 0 NOT NULL,
   daily_budget_goal NUMERIC DEFAULT 3000 NOT NULL,
+  target_asset NUMERIC DEFAULT 1000000 NOT NULL,
   currency_unit TEXT DEFAULT '円' NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -25,7 +26,11 @@ CREATE TRIGGER update_user_settings_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+-- target_assetカラムを追加（既存テーブルがある場合）
+ALTER TABLE user_settings 
+ADD COLUMN IF NOT EXISTS target_asset NUMERIC DEFAULT 1000000 NOT NULL;
+
 -- デフォルトユーザーの初期データを挿入（オプション）
-INSERT INTO user_settings (user_id, initial_asset, daily_budget_goal, currency_unit)
-VALUES ('default', 0, 3000, '円')
+INSERT INTO user_settings (user_id, initial_asset, daily_budget_goal, target_asset, currency_unit)
+VALUES ('default', 0, 3000, 1000000, '円')
 ON CONFLICT (user_id) DO NOTHING;

@@ -9,6 +9,7 @@ import AssetTrendChart from '@/components/AssetTrendChart';
 import DailyTrendChart from '@/components/DailyTrendChart';
 import ProfitLossStatement from '@/components/ProfitLossStatement';
 import BalanceSheet from '@/components/BalanceSheet';
+import LiquidTankBackground from '@/components/LiquidTankBackground';
 
 // 型定義（データベースから取得する型）
 type TransactionDB = {
@@ -36,6 +37,7 @@ export default function Home() {
   const [tabMode, setTabMode] = useState<TabMode>('dashboard');
   const [initialAsset, setInitialAsset] = useState<number>(0);
   const [dailyBudgetGoal, setDailyBudgetGoal] = useState<number>(3000);
+  const [targetAsset, setTargetAsset] = useState<number>(10000000); // デフォルト: 1000万
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -101,6 +103,7 @@ export default function Home() {
         if (data) {
           setInitialAsset(data.initial_asset || 0);
           setDailyBudgetGoal(data.daily_budget_goal || 3000);
+          setTargetAsset(data.target_asset || 10000000); // デフォルト: 1000万
         } else {
           // データがない場合、localStorageから読み込む
           if (typeof window !== 'undefined') {
@@ -335,9 +338,93 @@ export default function Home() {
 
   const totalBalance = getTotalBalance();
 
+  // 現在の資産額を計算（初期資産 + 全取引の合計）
+  const calculateCurrentAsset = () => {
+    const totalTransactionBalance = items.reduce((acc, item) => {
+      const actualAmount = item.type === 'expense' ? -item.amount : item.amount;
+      return acc + actualAmount;
+    }, 0);
+    return initialAsset + totalTransactionBalance;
+  };
+
+  const currentAsset = calculateCurrentAsset();
+
+  // 前日の資産額を計算
+  const calculatePreviousDayAsset = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+
+    const previousDayTransactions = items.filter((item) => {
+      if (!item.created_at) return false;
+      const itemDate = new Date(item.created_at);
+      return itemDate < yesterday;
+    });
+
+    const previousDayBalance = previousDayTransactions.reduce((acc, item) => {
+      const actualAmount = item.type === 'expense' ? -item.amount : item.amount;
+      return acc + actualAmount;
+    }, 0);
+
+    return initialAsset + previousDayBalance;
+  };
+
+  const previousDayAsset = calculatePreviousDayAsset();
+
+  // 警告状態を判定（今月の収支が赤字、または前日比で大幅減少）
+  const isWarningState = () => {
+    // 今月の収支が赤字かどうか
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const monthData = items.filter((item) => {
+      if (!item.created_at) return false;
+      const itemDate = new Date(item.created_at);
+      return itemDate >= firstDayOfMonth;
+    });
+
+    const income = monthData
+      .filter((item) => item.type === 'income')
+      .reduce((acc, item) => acc + item.amount, 0);
+
+    const expense = monthData
+      .filter((item) => item.type === 'expense')
+      .reduce((acc, item) => acc + item.amount, 0);
+
+    const isMonthNegative = expense > income;
+
+    // 前日比で大幅減少（10%以上減少）かどうか
+    const decreaseRate = previousDayAsset > 0 
+      ? ((previousDayAsset - currentAsset) / previousDayAsset) * 100
+      : 0;
+    const isSignificantDecrease = decreaseRate >= 10;
+
+    // 資産がマイナスの場合も警告
+    const isNegativeAsset = currentAsset < 0;
+
+    return isMonthNegative || isSignificantDecrease || isNegativeAsset;
+  };
+
+  const isNegative = isWarningState();
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-900">
-      <main className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-transparent p-4 md:p-8 font-sans text-gray-900 relative">
+      {/* Liquid Tank Background - 最背面に配置 */}
+      <LiquidTankBackground
+        currentAsset={currentAsset}
+        targetAsset={targetAsset}
+        isNegative={isNegative}
+      />
+      
+      {/* メインコンテンツ - z-indexを高くして浮き上がらせる */}
+      <main className="max-w-4xl mx-auto space-y-6 relative z-10">
+        {/* コンテンツの背景を半透明にして視認性を確保 */}
+        <style jsx global>{`
+          .bg-white {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            backdrop-filter: blur(8px);
+          }
+        `}</style>
         {/* タイトルと設定アイコン */}
         <div className="text-center relative">
           <Link
@@ -837,6 +924,7 @@ export default function Home() {
                             user_id: userId,
                             initial_asset: value,
                             daily_budget_goal: dailyBudgetGoal,
+                            target_asset: targetAsset,
                             currency_unit: '円',
                           },
                           { onConflict: 'user_id' }

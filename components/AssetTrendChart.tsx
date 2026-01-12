@@ -32,7 +32,9 @@ export default function AssetTrendChart({
       try {
         // まず、ログイン中のユーザーIDを取得（認証がある場合）
         const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || 'default';
+        // デフォルトユーザーID（UUID形式）
+        const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000000';
+        const userId = user?.id || DEFAULT_USER_ID;
 
         const { data, error } = await supabase
           .from('user_settings')

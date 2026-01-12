@@ -1,5 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+
 type Transaction = {
   id: string;
   name: string;
@@ -17,11 +20,62 @@ type BalanceSheetProps = {
   onInitialAssetChange: (value: number) => void;
 };
 
+// デフォルトユーザーID（UUID形式）
+const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 export default function BalanceSheet({
   transactions,
-  initialAsset,
+  initialAsset: propInitialAsset,
   onInitialAssetChange,
 }: BalanceSheetProps) {
+  const [initialAsset, setInitialAsset] = useState<number>(propInitialAsset || 0);
+
+  // user_settingsから初期資産を取得
+  useEffect(() => {
+    const fetchInitialAsset = async () => {
+      try {
+        // ログイン中のユーザーIDを取得（認証がある場合）
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || DEFAULT_USER_ID;
+
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('initial_asset')
+          .eq('user_id', userId)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          // PGRST116は「行が見つからない」エラー
+          console.error('Error fetching initial asset:', error);
+          // propsから受け取った値を使用
+          if (propInitialAsset !== undefined) {
+            setInitialAsset(propInitialAsset);
+          }
+          return;
+        }
+
+        if (data) {
+          const fetchedInitialAsset = data.initial_asset || 0;
+          setInitialAsset(fetchedInitialAsset);
+          // 親コンポーネントにも通知（必要に応じて）
+          if (fetchedInitialAsset !== propInitialAsset) {
+            onInitialAssetChange(fetchedInitialAsset);
+          }
+        } else if (propInitialAsset !== undefined) {
+          // データがない場合、propsから受け取った値を使用
+          setInitialAsset(propInitialAsset);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        // エラー時はpropsから受け取った値を使用
+        if (propInitialAsset !== undefined) {
+          setInitialAsset(propInitialAsset);
+        }
+      }
+    };
+
+    fetchInitialAsset();
+  }, [propInitialAsset, onInitialAssetChange]);
   // 全期間の収支累計
   const totalBalance = transactions.reduce((acc, item) => {
     const actualAmount = item.type === 'expense' ? -item.amount : item.amount;
