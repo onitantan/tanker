@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import ExpensePieChart from '@/components/ExpensePieChart';
@@ -10,6 +11,7 @@ import DailyTrendChart from '@/components/DailyTrendChart';
 import ProfitLossStatement from '@/components/ProfitLossStatement';
 import BalanceSheet from '@/components/BalanceSheet';
 import LiquidTankBackground from '@/components/LiquidTankBackground';
+import AuthGuard from '@/components/AuthGuard';
 
 // 型定義（データベースから取得する型）
 type TransactionDB = {
@@ -32,6 +34,7 @@ type ViewMode = 'daily' | 'weekly' | 'monthly' | 'yearly';
 type TabMode = 'dashboard' | 'analytics';
 
 export default function Home() {
+  const router = useRouter();
   const [items, setItems] = useState<Transaction[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
   const [tabMode, setTabMode] = useState<TabMode>('dashboard');
@@ -39,6 +42,7 @@ export default function Home() {
   const [dailyBudgetGoal, setDailyBudgetGoal] = useState<number>(3000);
   const [targetAsset, setTargetAsset] = useState<number>(10000000); // デフォルト: 1000万
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -77,9 +81,19 @@ export default function Home() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        // ログイン中のユーザーIDを取得（認証がある場合）
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || 'default';
+        // ログイン中のユーザーIDを取得（必須）
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.error('Error fetching user:', userError);
+          // 認証ガードで既にリダイレクトされるはずだが、念のため
+          // デフォルト値を設定してローディングを終了
+          setInitialAsset(0);
+          setDailyBudgetGoal(3000);
+          setTargetAsset(1000000); // デフォルト: 100万
+          setLoading(false);
+          return;
+        }
+        const userId = user.id;
 
         const { data, error } = await supabase
           .from('user_settings')
@@ -87,41 +101,56 @@ export default function Home() {
           .eq('user_id', userId)
           .single();
 
-        if (error && error.code !== 'PGRST116') {
-          // PGRST116は「行が見つからない」エラー（初回アクセス時など）
-          console.error('Error fetching settings:', error);
-          // フォールバック: localStorageから読み込む
+        // データがない場合（PGRST116エラー）またはエラーの場合、デフォルト値を使用
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // 行が見つからないエラー（新規ユーザー）は正常な状態
+            console.log('No user settings found, using defaults');
+          } else {
+            // その他のエラー
+            console.error('Error fetching settings:', error);
+          }
+          
+          // デフォルト値を設定
+          setInitialAsset(0);
+          setDailyBudgetGoal(3000);
+          setTargetAsset(1000000); // デフォルト: 100万
+          
+          // localStorageから読み込む（フォールバック）
           if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('tanker_initial_asset');
             if (saved) {
               setInitialAsset(parseInt(saved, 10));
             }
           }
-          return;
-        }
-
-        if (data) {
+        } else if (data) {
+          // データが存在する場合
           setInitialAsset(data.initial_asset || 0);
           setDailyBudgetGoal(data.daily_budget_goal || 3000);
-          setTargetAsset(data.target_asset || 10000000); // デフォルト: 1000万
+          setTargetAsset(data.target_asset || 1000000); // デフォルト: 100万
         } else {
-          // データがない場合、localStorageから読み込む
-          if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('tanker_initial_asset');
-            if (saved) {
-              setInitialAsset(parseInt(saved, 10));
-            }
-          }
+          // データがnullの場合（念のため）
+          setInitialAsset(0);
+          setDailyBudgetGoal(3000);
+          setTargetAsset(1000000); // デフォルト: 100万
         }
       } catch (error) {
         console.error('Error:', error);
-        // フォールバック: localStorageから読み込む
+        // エラー時もデフォルト値を設定
+        setInitialAsset(0);
+        setDailyBudgetGoal(3000);
+        setTargetAsset(1000000); // デフォルト: 100万
+        
+        // localStorageから読み込む（フォールバック）
         if (typeof window !== 'undefined') {
           const saved = localStorage.getItem('tanker_initial_asset');
           if (saved) {
             setInitialAsset(parseInt(saved, 10));
           }
         }
+      } finally {
+        // データ取得完了（成功・失敗問わず）ローディングを終了
+        setLoading(false);
       }
     };
 
@@ -132,22 +161,39 @@ export default function Home() {
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
+        // ログイン中のユーザーIDを取得（必須）
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.error('Error fetching user:', userError);
+          // データが空でもローディングを終了
+          setItems([]);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('transactions')
           .select('*')
+          .eq('user_id', user.id) // ログイン中のユーザーの取引のみ取得
           .order('created_at', { ascending: true });
 
         if (error) {
           console.error('Error fetching transactions:', error);
+          // エラー時も空配列を設定してローディングを終了
+          setItems([]);
           return;
         }
 
         if (data) {
           const transformedData = data.map(transformTransaction);
           setItems(transformedData);
+        } else {
+          // データがnullの場合、空配列を設定
+          setItems([]);
         }
       } catch (error) {
         console.error('Error:', error);
+        // エラー時も空配列を設定
+        setItems([]);
       }
     };
 
@@ -196,6 +242,15 @@ export default function Home() {
     e.preventDefault();
     if (!formData.name || !formData.amount) return;
 
+    // 現在のユーザー情報を取得（必須）
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('Error fetching user:', userError);
+      alert('ログインが必要です。ログイン画面に移動します。');
+      router.push('/auth');
+      return;
+    }
+
     const amountNum = parseInt(formData.amount);
 
     try {
@@ -204,6 +259,7 @@ export default function Home() {
         amount: amountNum,
         type: formData.type,
         frequency: formData.frequency,
+        user_id: user.id, // 本物のuser.idを使用（必須）
       };
       
       // 支出の場合のみcategoryを追加
@@ -230,7 +286,8 @@ export default function Home() {
         const { error } = await supabase
           .from('transactions')
           .update(updateData)
-          .eq('id', editingTransaction.id);
+          .eq('id', editingTransaction.id)
+          .eq('user_id', user.id); // ログイン中のユーザーの取引のみ更新
 
         if (error) {
           console.error('Error updating transaction:', error);
@@ -254,9 +311,13 @@ export default function Home() {
       }
 
       // データを再取得して画面を更新
+      const { data: { user: fetchUser } } = await supabase.auth.getUser();
+      if (!fetchUser) return;
+
       const { data: allData, error: fetchError } = await supabase
         .from('transactions')
         .select('*')
+        .eq('user_id', fetchUser.id) // ログイン中のユーザーの取引のみ取得
         .order('created_at', { ascending: true });
 
       if (!fetchError && allData) {
@@ -273,10 +334,20 @@ export default function Home() {
 
   const handleDeleteItem = async (id: string) => {
     try {
+      // ログイン中のユーザーIDを取得（必須）
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error('Error fetching user:', userError);
+        alert('ログインが必要です。ログイン画面に移動します。');
+        router.push('/auth');
+        return;
+      }
+
       const { error } = await supabase
         .from('transactions')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id); // ログイン中のユーザーの取引のみ削除
 
       if (error) {
         console.error('Error deleting transaction:', error);
@@ -292,6 +363,8 @@ export default function Home() {
       if (!fetchError && data) {
         const transformedData = data.map(transformTransaction);
         setItems(transformedData);
+      } else if (fetchError) {
+        console.error('Error fetching transactions:', fetchError);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -407,7 +480,22 @@ export default function Home() {
 
   const isNegative = isWarningState();
 
+  // ローディング中は何も表示しない
+  if (loading) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen bg-transparent flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600 mb-4"></div>
+            <p className="text-slate-600">読み込み中...</p>
+          </div>
+        </div>
+      </AuthGuard>
+    );
+  }
+
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-transparent p-4 md:p-8 font-sans text-gray-900 relative">
       {/* Liquid Tank Background - 最背面に配置 */}
       <LiquidTankBackground
@@ -425,34 +513,60 @@ export default function Home() {
             backdrop-filter: blur(8px);
           }
         `}</style>
-        {/* タイトルと設定アイコン */}
+        {/* タイトルと設定アイコン・ログアウトボタン */}
         <div className="text-center relative">
-          <Link
-            href="/settings"
-            className="absolute top-0 right-0 text-slate-600 hover:text-slate-800 transition-colors p-2 rounded-lg hover:bg-slate-100"
-            aria-label="設定"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          <div className="absolute top-0 right-0 flex gap-2">
+            <Link
+              href="/settings"
+              className="text-slate-600 hover:text-slate-800 transition-colors p-2 rounded-lg hover:bg-slate-100"
+              aria-label="設定"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-          </Link>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+            </Link>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push('/auth');
+              }}
+              className="text-slate-600 hover:text-slate-800 transition-colors p-2 rounded-lg hover:bg-slate-100"
+              aria-label="ログアウト"
+              title="ログアウト"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+            </button>
+          </div>
           <h1 className="text-4xl font-bold text-slate-800">Tanker</h1>
           <p className="text-slate-500 mt-2">個人の財務管理ツール</p>
         </div>
@@ -913,9 +1027,13 @@ export default function Home() {
                     setInitialAsset(value);
                     // Supabaseに保存
                     try {
-                      // ログイン中のユーザーIDを取得（認証がある場合）
-                      const { data: { user } } = await supabase.auth.getUser();
-                      const userId = user?.id || 'default';
+                      // ログイン中のユーザーIDを取得（必須）
+                      const { data: { user }, error: userError } = await supabase.auth.getUser();
+                      if (userError || !user) {
+                        console.error('Error fetching user:', userError);
+                        return;
+                      }
+                      const userId = user.id;
 
                       await supabase
                         .from('user_settings')
@@ -944,5 +1062,6 @@ export default function Home() {
         )}
       </main>
     </div>
+    </AuthGuard>
   );
 }

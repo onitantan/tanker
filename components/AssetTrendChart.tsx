@@ -30,11 +30,20 @@ export default function AssetTrendChart({
   useEffect(() => {
     const fetchInitialAsset = async () => {
       try {
-        // まず、ログイン中のユーザーIDを取得（認証がある場合）
-        const { data: { user } } = await supabase.auth.getUser();
-        // デフォルトユーザーID（UUID形式）
-        const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000000';
-        const userId = user?.id || DEFAULT_USER_ID;
+        // ログイン中のユーザーIDを取得（必須）
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        // ユーザーが取得できない場合は処理を中断
+        if (userError || !user) {
+          console.error('Error fetching user:', userError);
+          // propsから受け取った値またはデフォルト値を使用
+          if (propInitialAsset !== undefined) {
+            setInitialAsset(propInitialAsset);
+          }
+          return;
+        }
+        
+        const userId = user.id;
 
         const { data, error } = await supabase
           .from('user_settings')
