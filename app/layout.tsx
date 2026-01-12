@@ -1,33 +1,28 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google"; // 汎用的なInterフォントを使います
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
+// 1. 基本メタデータ
 export const metadata: Metadata = {
   title: "Tanker - Asset Tank Management",
   description: "個人の財務管理ツール - 資産の貯水槽",
   manifest: "/manifest.json",
-  themeColor: "#06b6d4",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Tanker",
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
+};
+
+// 2. スマホ表示設定（ここを分けるのが新しいルールです）
+export const viewport: Viewport = {
+  themeColor: "#06b6d4",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false, // アプリっぽくズーム禁止
 };
 
 export default function RootLayout({
@@ -37,10 +32,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      {/* スマホ用レイアウト：背景グレー、中央寄せ、最大幅固定 */}
+      <body className={`${inter.className} overflow-x-hidden bg-gray-50 text-gray-900 antialiased`}>
+        <div className="mx-auto min-h-screen max-w-md bg-white shadow-xl overflow-hidden">
+          {children}
+        </div>
       </body>
     </html>
   );
