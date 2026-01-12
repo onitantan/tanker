@@ -18,6 +18,7 @@ import ExpensePieChart from '@/components/ExpensePieChart';
 import IncomeExpenseBarChart from '@/components/IncomeExpenseBarChart';
 import AssetTrendChart from '@/components/AssetTrendChart';
 import DailyTrendChart from '@/components/DailyTrendChart';
+import IncomeExpenseTrendChart from '@/components/IncomeExpenseTrendChart';
 import ProfitLossStatement from '@/components/ProfitLossStatement';
 import BalanceSheet from '@/components/BalanceSheet';
 import AuthGuard from '@/components/AuthGuard';
@@ -380,10 +381,10 @@ export default function Home() {
         <LiquidTankBackground percentage={percentage} />
         
         {/* メインコンテンツ */}
-        <main className="max-w-md md:max-w-7xl mx-auto space-y-6 relative z-10">
+        <main className="w-full max-w-7xl mx-auto space-y-6 relative z-10 px-4 md:px-6">
           {/* ヘッダー */}
           <header className="flex items-center justify-between px-6 py-4 bg-white/90 backdrop-blur-lg rounded-xl shadow-sm z-10 relative">
-            <h1 className="text-xl font-black tracking-tighter text-cyan-600">
+            <h1 className="text-xl font-black tracking-tighter text-cyan-600 whitespace-nowrap">
               TANKER
             </h1>
             <div className="flex gap-2">
@@ -461,30 +462,28 @@ export default function Home() {
             </div>
           </div>
 
-          {/* タブ切り替え */}
-          <div className="bg-white/90 backdrop-blur-lg rounded-xl shadow-sm border border-slate-100 p-1">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setTabMode('dashboard')}
-                className={`flex-1 py-3 rounded-lg font-bold transition-colors ${
-                  tabMode === 'dashboard'
-                    ? 'bg-cyan-600 text-white'
-                    : 'bg-transparent text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                Dashboard (入力・現状)
-              </button>
-              <button
-                onClick={() => setTabMode('analytics')}
-                className={`flex-1 py-3 rounded-lg font-bold transition-colors ${
-                  tabMode === 'analytics'
-                    ? 'bg-cyan-600 text-white'
-                    : 'bg-transparent text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                Analytics (分析)
-              </button>
-            </div>
+          {/* タブ切り替え（セグメンテッド・コントロール風） */}
+          <div className="bg-gray-100 p-1 rounded-lg inline-flex w-full">
+            <button
+              onClick={() => setTabMode('dashboard')}
+              className={`flex-1 py-3 px-4 rounded-md font-bold text-sm transition-all whitespace-nowrap ${
+                tabMode === 'dashboard'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Dashboard (入力・現状)
+            </button>
+            <button
+              onClick={() => setTabMode('analytics')}
+              className={`flex-1 py-3 px-4 rounded-md font-bold text-sm transition-all whitespace-nowrap ${
+                tabMode === 'analytics'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Analytics (分析)
+            </button>
           </div>
 
           {/* メインコンテンツ（スクロール可能） */}
@@ -503,7 +502,7 @@ export default function Home() {
                   )}
                   <form onSubmit={handleAddItem} className="space-y-4">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                      <label className="block text-sm font-bold text-slate-700 mb-2 whitespace-nowrap">
                         項目名
                       </label>
                       <input
@@ -516,7 +515,7 @@ export default function Home() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                      <label className="block text-sm font-bold text-slate-700 mb-2 whitespace-nowrap">
                         金額
                       </label>
                       <input
@@ -529,7 +528,7 @@ export default function Home() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                      <label className="block text-sm font-bold text-slate-700 mb-2 whitespace-nowrap">
                         種類
                       </label>
                       <div className="flex gap-2">
@@ -542,7 +541,7 @@ export default function Home() {
                               : 'bg-slate-200 text-slate-700'
                           }`}
                         >
-                          支出
+                          <span className="whitespace-nowrap">支出</span>
                         </button>
                         <button
                           type="button"
@@ -553,12 +552,12 @@ export default function Home() {
                               : 'bg-slate-200 text-slate-700'
                           }`}
                         >
-                          収入
+                          <span className="whitespace-nowrap">収入</span>
                         </button>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                      <label className="block text-sm font-bold text-slate-700 mb-2 whitespace-nowrap">
                         頻度
                       </label>
                       <select
@@ -575,9 +574,9 @@ export default function Home() {
                     </div>
                     {formData.type === 'expense' && (
                       <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">
-                          分類
-                        </label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2 whitespace-nowrap">
+                        分類
+                      </label>
                         <div className="grid grid-cols-3 gap-2">
                           <button
                             type="button"
@@ -589,7 +588,7 @@ export default function Home() {
                             }`}
                           >
                             <div className="text-lg mb-1">💸</div>
-                            <div className="text-xs font-bold">消費</div>
+                            <div className="text-xs font-bold whitespace-nowrap">消費</div>
                           </button>
                           <button
                             type="button"
@@ -601,7 +600,7 @@ export default function Home() {
                             }`}
                           >
                             <div className="text-lg mb-1">🗑️</div>
-                            <div className="text-xs font-bold">浪費</div>
+                            <div className="text-xs font-bold whitespace-nowrap">浪費</div>
                           </button>
                           <button
                             type="button"
@@ -613,16 +612,16 @@ export default function Home() {
                             }`}
                           >
                             <div className="text-lg mb-1">🌱</div>
-                            <div className="text-xs font-bold">投資</div>
+                            <div className="text-xs font-bold whitespace-nowrap">投資</div>
                           </button>
                         </div>
                       </div>
                     )}
                     {formData.frequency === 'one_time' && (
                       <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">
-                          日付
-                        </label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2 whitespace-nowrap">
+                        日付
+                      </label>
                         <input
                           type="date"
                           value={formData.date}
@@ -662,7 +661,7 @@ export default function Home() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                      <label className="block text-sm font-bold text-slate-700 mb-2 whitespace-nowrap">
                         支払い方法
                       </label>
                       <div className="grid grid-cols-4 gap-2">
@@ -694,7 +693,7 @@ export default function Home() {
                           onClick={resetForm}
                           className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-bold hover:bg-slate-300"
                         >
-                          キャンセル
+                          <span className="whitespace-nowrap">キャンセル</span>
                         </button>
                       )}
                       <button
@@ -704,16 +703,16 @@ export default function Home() {
                             ? 'bg-blue-600 text-white hover:bg-blue-700'
                             : 'bg-slate-900 text-white hover:bg-slate-800'
                         }`}
-                      >
-                        {editingTransaction ? '更新' : '追加'}
-                      </button>
+                        >
+                          <span className="whitespace-nowrap">{editingTransaction ? '更新' : '追加'}</span>
+                        </button>
                     </div>
                   </form>
                 </div>
 
                 {/* 取引リスト */}
                 <div className="bg-white/90 backdrop-blur-lg p-6 rounded-xl shadow-sm border border-slate-100">
-                  <h2 className="text-lg font-bold text-slate-800 mb-4">取引履歴</h2>
+                  <h2 className="text-lg font-bold text-slate-800 mb-4 whitespace-nowrap">取引履歴</h2>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {items.length === 0 ? (
                       <p className="text-center text-slate-400 py-8">取引がありません</p>
@@ -800,7 +799,10 @@ export default function Home() {
                     <DailyTrendChart transactions={items} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <IncomeExpenseTrendChart transactions={items} />
                     <ProfitLossStatement transactions={items} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <BalanceSheet
                       transactions={items}
                       initialAsset={initialAsset}
@@ -823,9 +825,9 @@ export default function Home() {
                         }
                       }}
                     />
+                    <ExpensePieChart transactions={items} viewMode="monthly" />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <ExpensePieChart transactions={items} viewMode="monthly" />
                     <IncomeExpenseBarChart transactions={items} viewMode="monthly" />
                   </div>
                 </div>
