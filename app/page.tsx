@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import ExpensePieChart from '@/components/ExpensePieChart';
 import IncomeExpenseBarChart from '@/components/IncomeExpenseBarChart';
@@ -33,13 +34,8 @@ export default function Home() {
   const [items, setItems] = useState<Transaction[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
   const [tabMode, setTabMode] = useState<TabMode>('dashboard');
-  const [initialAsset, setInitialAsset] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('tanker_initial_asset');
-      return saved ? parseInt(saved, 10) : 0;
-    }
-    return 0;
-  });
+  const [initialAsset, setInitialAsset] = useState<number>(0);
+  const [dailyBudgetGoal, setDailyBudgetGoal] = useState<number>(3000);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -74,6 +70,60 @@ export default function Home() {
       dailyValue: calculateDailyValue(dbItem.amount, dbItem.frequency, dbItem.type),
     };
   };
+
+  // 設定を取得
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        // ログイン中のユーザーIDを取得（認証がある場合）
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || 'default';
+
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          // PGRST116は「行が見つからない」エラー（初回アクセス時など）
+          console.error('Error fetching settings:', error);
+          // フォールバック: localStorageから読み込む
+          if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('tanker_initial_asset');
+            if (saved) {
+              setInitialAsset(parseInt(saved, 10));
+            }
+          }
+          return;
+        }
+
+        if (data) {
+          setInitialAsset(data.initial_asset || 0);
+          setDailyBudgetGoal(data.daily_budget_goal || 3000);
+        } else {
+          // データがない場合、localStorageから読み込む
+          if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('tanker_initial_asset');
+            if (saved) {
+              setInitialAsset(parseInt(saved, 10));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        // フォールバック: localStorageから読み込む
+        if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('tanker_initial_asset');
+          if (saved) {
+            setInitialAsset(parseInt(saved, 10));
+          }
+        }
+      }
+    };
+
+    fetchSettings();
+  }, []);
 
   // データ取得
   useEffect(() => {
@@ -288,8 +338,34 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-900">
       <main className="max-w-4xl mx-auto space-y-6">
-        {/* タイトル */}
-        <div className="text-center">
+        {/* タイトルと設定アイコン */}
+        <div className="text-center relative">
+          <Link
+            href="/settings"
+            className="absolute top-0 right-0 text-slate-600 hover:text-slate-800 transition-colors p-2 rounded-lg hover:bg-slate-100"
+            aria-label="設定"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </Link>
           <h1 className="text-4xl font-bold text-slate-800">Tanker</h1>
           <p className="text-slate-500 mt-2">個人の財務管理ツール</p>
         </div>
@@ -746,10 +822,31 @@ export default function Home() {
                 <BalanceSheet
                   transactions={items}
                   initialAsset={initialAsset}
-                  onInitialAssetChange={(value) => {
+                  onInitialAssetChange={async (value) => {
                     setInitialAsset(value);
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('tanker_initial_asset', value.toString());
+                    // Supabaseに保存
+                    try {
+                      // ログイン中のユーザーIDを取得（認証がある場合）
+                      const { data: { user } } = await supabase.auth.getUser();
+                      const userId = user?.id || 'default';
+
+                      await supabase
+                        .from('user_settings')
+                        .upsert(
+                          {
+                            user_id: userId,
+                            initial_asset: value,
+                            daily_budget_goal: dailyBudgetGoal,
+                            currency_unit: '円',
+                          },
+                          { onConflict: 'user_id' }
+                        );
+                    } catch (error) {
+                      console.error('Error saving initial asset:', error);
+                      // フォールバック: localStorageに保存
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('tanker_initial_asset', value.toString());
+                      }
                     }
                   }}
                 />

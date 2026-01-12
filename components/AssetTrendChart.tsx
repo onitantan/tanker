@@ -1,6 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { supabase } from '@/lib/supabaseClient';
 
 type Transaction = {
   id: string;
@@ -15,13 +17,56 @@ type Transaction = {
 
 type AssetTrendChartProps = {
   transactions: Transaction[];
-  initialAsset: number;
+  initialAsset?: number; // オプショナルに変更（後方互換性のため）
 };
 
 export default function AssetTrendChart({
   transactions,
-  initialAsset,
+  initialAsset: propInitialAsset,
 }: AssetTrendChartProps) {
+  const [initialAsset, setInitialAsset] = useState<number>(propInitialAsset || 0);
+
+  // user_settingsから初期資産を取得
+  useEffect(() => {
+    const fetchInitialAsset = async () => {
+      try {
+        // まず、ログイン中のユーザーIDを取得（認証がある場合）
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || 'default';
+
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('initial_asset')
+          .eq('user_id', userId)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          // PGRST116は「行が見つからない」エラー
+          console.error('Error fetching initial asset:', error);
+          // propsから受け取った値またはデフォルト値を使用
+          if (propInitialAsset !== undefined) {
+            setInitialAsset(propInitialAsset);
+          }
+          return;
+        }
+
+        if (data) {
+          setInitialAsset(data.initial_asset || 0);
+        } else if (propInitialAsset !== undefined) {
+          // データがない場合、propsから受け取った値を使用
+          setInitialAsset(propInitialAsset);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        // エラー時はpropsから受け取った値を使用
+        if (propInitialAsset !== undefined) {
+          setInitialAsset(propInitialAsset);
+        }
+      }
+    };
+
+    fetchInitialAsset();
+  }, [propInitialAsset]);
   // 日付ごとにグループ化して累積を計算（直近30日間）
   // 固定費（Monthly等を日割り）を毎日引き、One-timeの収入/支出を足し引き
   const calculateDailyTrend = () => {
