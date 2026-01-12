@@ -10,6 +10,7 @@ type Transaction = {
   frequency: 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   dailyValue: number;
   category?: 'consumption' | 'waste' | 'investment' | null;
+  tag?: string | null;
 };
 
 type ExpensePieChartProps = {

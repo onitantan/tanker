@@ -17,6 +17,7 @@ type TransactionDB = {
   type: 'income' | 'expense';
   frequency: 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   category?: 'consumption' | 'waste' | 'investment' | null;
+  tag?: string | null;
   created_at?: string;
 };
 
@@ -45,6 +46,7 @@ export default function Home() {
     type: 'expense',
     frequency: 'one_time',
     category: 'consumption' as 'consumption' | 'waste' | 'investment' | null,
+    tag: 'food' as string,
     date: new Date().toISOString().split('T')[0], // デフォルトは今日
   });
 
@@ -117,6 +119,13 @@ export default function Home() {
           insertData.category = formData.category;
         }
 
+        // tagを追加（nullやundefinedの場合は'other'として扱う）
+        if (formData.tag) {
+          insertData.tag = formData.tag;
+        } else {
+          insertData.tag = 'other';
+        }
+
         // One-timeの場合、指定された日付をcreated_atとして使用
         if (formData.frequency === 'one_time' && formData.date) {
           insertData.created_at = new Date(formData.date).toISOString();
@@ -150,6 +159,7 @@ export default function Home() {
         name: '', 
         amount: '',
         category: formData.type === 'expense' ? 'consumption' : null,
+        tag: 'food', // デフォルトに戻す
         date: new Date().toISOString().split('T')[0], // リセット時は今日に戻す
       });
     } catch (error) {
@@ -344,6 +354,131 @@ export default function Home() {
               />
             </div>
           </div>
+          
+          {/* 勘定科目（タグ）選択 */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-2">勘定科目（タグ）</label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'food' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'food'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🍱</div>
+                <div className="font-bold text-slate-700">食費</div>
+                <div className="text-xs text-slate-500">Food</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'daily' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'daily'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🧻</div>
+                <div className="font-bold text-slate-700">日用品</div>
+                <div className="text-xs text-slate-500">Daily</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'transport' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'transport'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🚃</div>
+                <div className="font-bold text-slate-700">交通費</div>
+                <div className="text-xs text-slate-500">Transport</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'housing' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'housing'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🏠</div>
+                <div className="font-bold text-slate-700">住居・通信</div>
+                <div className="text-xs text-slate-500">Housing</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'social' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'social'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🍻</div>
+                <div className="font-bold text-slate-700">交際費</div>
+                <div className="text-xs text-slate-500">Social</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'fun' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'fun'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🎮</div>
+                <div className="font-bold text-slate-700">趣味・娯楽</div>
+                <div className="text-xs text-slate-500">Fun</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'medical' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'medical'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🏥</div>
+                <div className="font-bold text-slate-700">医療費</div>
+                <div className="text-xs text-slate-500">Medical</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'education' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'education'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">🎓</div>
+                <div className="font-bold text-slate-700">教育</div>
+                <div className="text-xs text-slate-500">Education</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tag: 'other' })}
+                className={`p-2 rounded-lg border-2 transition-all text-xs ${
+                  formData.tag === 'other'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className="text-sm mb-1">❓</div>
+                <div className="font-bold text-slate-700">その他</div>
+                <div className="text-xs text-slate-500">Other</div>
+              </button>
+            </div>
+          </div>
+          
           <div className="grid grid-cols-2 gap-4">
              <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">タイプ</label>

@@ -7,6 +7,7 @@ type Transaction = {
   type: 'income' | 'expense';
   frequency: 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   dailyValue: number;
+  tag?: string | null;
   created_at?: string;
 };
 
