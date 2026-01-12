@@ -611,6 +611,36 @@ export default function Home() {
                         />
                       </div>
                     )}
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                        勘定科目（タグ）
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { value: 'food', label: '🍱 食費', name: 'food' },
+                          { value: 'daily', label: '🧻 日用品', name: 'daily' },
+                          { value: 'transport', label: '🚃 交通費', name: 'transport' },
+                          { value: 'housing', label: '🏠 住居・通信', name: 'housing' },
+                          { value: 'social', label: '🍻 交際費', name: 'social' },
+                          { value: 'fun', label: '🎮 趣味', name: 'fun' },
+                          { value: 'medical', label: '🏥 医療', name: 'medical' },
+                          { value: 'other', label: '❓ その他', name: 'other' },
+                        ].map((tag) => (
+                          <button
+                            key={tag.value}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, tag: tag.value })}
+                            className={`p-2 rounded-lg border-2 text-xs font-bold transition-colors ${
+                              formData.tag === tag.value
+                                ? 'border-cyan-600 bg-cyan-50 text-cyan-700'
+                                : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300'
+                            }`}
+                          >
+                            {tag.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       {editingTransaction && (
                         <button
@@ -642,10 +672,29 @@ export default function Home() {
                     {items.length === 0 ? (
                       <p className="text-center text-slate-400 py-8">取引がありません</p>
                     ) : (
-                      items.map((item) => (
+                      items.map((item) => {
+                        // タグのラベル定義
+                        const tagLabels: Record<string, string> = {
+                          food: '🍱 食費',
+                          daily: '🧻 日用品',
+                          transport: '🚃 交通費',
+                          housing: '🏠 住居・通信',
+                          social: '🍻 交際費',
+                          fun: '🎮 趣味',
+                          medical: '🏥 医療',
+                          other: '❓ その他',
+                        };
+                        const tagLabel = item.tag ? tagLabels[item.tag] || `❓ ${item.tag}` : '❓ その他';
+                        
+                        return (
                         <div key={item.id} className="bg-slate-50 p-4 rounded-lg flex justify-between items-center">
                           <div className="flex-1">
-                            <p className="font-bold">{item.name}</p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-bold">{item.name}</p>
+                              <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-full">
+                                {tagLabel}
+                              </span>
+                            </div>
                             <p className="text-xs text-slate-400">
                               {item.amount.toLocaleString()}円 ({item.frequency})
                             </p>
@@ -675,7 +724,8 @@ export default function Home() {
                             </button>
                           </div>
                         </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
