@@ -1,21 +1,20 @@
 import React from 'react';
-import { \
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer \
+// ↓ 記号を削除し、改行を修正しました
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-// ▼ ここで新しい「types」を読み込むように修正しました
-import { Transaction } from '@/types';
+// ↓ 安全のため ../types に変更しました
+import { Transaction } from '../types';
 
 type Props = {
   transactions: Transaction[];
 };
 
 const AssetTrendChart = ({ transactions }: Props) => {
-  // 日付順（古い順）に並べ替え
   const sortedData = [...transactions].sort((a, b) => 
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  // 累積データを計算
   let currentTotal = 0;
   const data = sortedData.map(t => {
     const amount = t.type === 'income' ? Number(t.amount) : -Number(t.amount);

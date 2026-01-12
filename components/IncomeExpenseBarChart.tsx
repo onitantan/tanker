@@ -1,15 +1,15 @@
 import React from 'react';
-import { \
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell \
+// ↓ 記号を削除しました
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-import { Transaction } from '@/types';
+import { Transaction } from '../types';
 
 type Props = {
   transactions: Transaction[];
 };
 
 const IncomeExpenseBarChart = ({ transactions }: Props) => {
-  // 収入と支出の合計を計算
   const summary = transactions.reduce(
     (acc, t) => {
       if (t.type === 'income') acc.income += Number(t.amount);

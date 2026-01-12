@@ -6,10 +6,10 @@ import TransactionForm from '@/components/TransactionForm';
 import TransactionList from '@/components/TransactionList';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import TankChart from '@/components/TankChart';
-// ↓もしここが赤いままなら、utilsフォルダが見つかっていません
-import { supabase } from '@/utils/supabaseClient'; 
+import { supabase } from '@/lib/supabaseClient'; 
 // ↓もしここが赤いままなら、typesフォルダが見つかっていません
-import { Transaction, UserSettings } from '@/types'; 
+import { Transaction, UserSettings } from '@/types';
+import AuthGuard from '@/components/AuthGuard';
 import Link from 'next/link';
 
 export default function Home() {
@@ -52,7 +52,8 @@ export default function Home() {
   const progress = targetAsset > 0 ? (currentAsset / targetAsset) * 100 : 0;
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+    <AuthGuard>
+      <main className="min-h-screen bg-gray-50 text-gray-900 font-sans">
       {/* 画面幅の制御用コンテナ */}
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
@@ -109,5 +110,6 @@ export default function Home() {
         </div>
       </div>
     </main>
+    </AuthGuard>
   );
 }

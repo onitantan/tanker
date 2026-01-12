@@ -6,6 +6,7 @@ export type Transaction = {
     amount: number;
     type: 'income' | 'expense';
     category: string;
+    name?: string;
     description?: string;
     payment_method?: string;
     tag?: string;
