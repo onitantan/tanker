@@ -40,6 +40,7 @@ export default function Home() {
     }
     return 0;
   });
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -100,6 +101,44 @@ export default function Home() {
     fetchTransactions();
   }, []);
 
+  // フォームをリセットする関数
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      amount: '',
+      type: 'expense',
+      frequency: 'one_time',
+      category: 'consumption',
+      tag: 'food',
+      date: new Date().toISOString().split('T')[0],
+    });
+    setEditingTransaction(null);
+  };
+
+  // 編集開始時の処理
+  const handleEditItem = (item: Transaction) => {
+    setEditingTransaction(item);
+    setFormData({
+      name: item.name,
+      amount: item.amount.toString(),
+      type: item.type,
+      frequency: item.frequency,
+      category: item.category || 'consumption',
+      tag: item.tag || 'food',
+      date: item.created_at 
+        ? new Date(item.created_at).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+    });
+    
+    // フォーム位置にスクロール
+    setTimeout(() => {
+      const formElement = document.querySelector('form');
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.amount) return;
@@ -107,61 +146,73 @@ export default function Home() {
     const amountNum = parseInt(formData.amount);
 
     try {
-        const insertData: any = {
-          name: formData.name,
-          amount: amountNum,
-          type: formData.type,
-          frequency: formData.frequency,
-        };
-        
-        // 支出の場合のみcategoryを追加
-        if (formData.type === 'expense' && formData.category) {
-          insertData.category = formData.category;
+      const updateData: any = {
+        name: formData.name,
+        amount: amountNum,
+        type: formData.type,
+        frequency: formData.frequency,
+      };
+      
+      // 支出の場合のみcategoryを追加
+      if (formData.type === 'expense' && formData.category) {
+        updateData.category = formData.category;
+      } else {
+        updateData.category = null;
+      }
+
+      // tagを追加（nullやundefinedの場合は'other'として扱う）
+      if (formData.tag) {
+        updateData.tag = formData.tag;
+      } else {
+        updateData.tag = 'other';
+      }
+
+      // 編集モードの場合
+      if (editingTransaction) {
+        // One-timeの場合、指定された日付をcreated_atとして使用（更新時は既存の日付を保持）
+        if (formData.frequency === 'one_time' && formData.date) {
+          updateData.created_at = new Date(formData.date).toISOString();
         }
 
-        // tagを追加（nullやundefinedの場合は'other'として扱う）
-        if (formData.tag) {
-          insertData.tag = formData.tag;
-        } else {
-          insertData.tag = 'other';
-        }
+        const { error } = await supabase
+          .from('transactions')
+          .update(updateData)
+          .eq('id', editingTransaction.id);
 
+        if (error) {
+          console.error('Error updating transaction:', error);
+          return;
+        }
+      } else {
+        // 新規追加の場合
         // One-timeの場合、指定された日付をcreated_atとして使用
         if (formData.frequency === 'one_time' && formData.date) {
-          insertData.created_at = new Date(formData.date).toISOString();
+          updateData.created_at = new Date(formData.date).toISOString();
         }
 
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('transactions')
-          .insert([insertData])
-          .select();
+          .insert([updateData]);
 
-      if (error) {
-        console.error('Error inserting transaction:', error);
-        return;
-      }
-
-      if (data && data.length > 0) {
-        // データを再取得して画面を更新
-        const { data: allData, error: fetchError } = await supabase
-          .from('transactions')
-          .select('*')
-          .order('created_at', { ascending: true });
-
-        if (!fetchError && allData) {
-          const transformedData = allData.map(transformTransaction);
-          setItems(transformedData);
+        if (error) {
+          console.error('Error inserting transaction:', error);
+          return;
         }
       }
 
-      setFormData({ 
-        ...formData, 
-        name: '', 
-        amount: '',
-        category: formData.type === 'expense' ? 'consumption' : null,
-        tag: 'food', // デフォルトに戻す
-        date: new Date().toISOString().split('T')[0], // リセット時は今日に戻す
-      });
+      // データを再取得して画面を更新
+      const { data: allData, error: fetchError } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (!fetchError && allData) {
+        const transformedData = allData.map(transformTransaction);
+        setItems(transformedData);
+      }
+
+      // フォームをリセット
+      resetForm();
     } catch (error) {
       console.error('Error:', error);
     }
@@ -331,7 +382,21 @@ export default function Home() {
           <ExpensePieChart transactions={items} viewMode={viewMode} />
         </div>
 
-        <form onSubmit={handleAddItem} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
+        <form 
+          onSubmit={handleAddItem} 
+          className={`p-6 rounded-xl shadow-sm border-2 space-y-4 transition-colors ${
+            editingTransaction 
+              ? 'bg-blue-50 border-blue-300' 
+              : 'bg-white border-slate-100'
+          }`}
+        >
+          {editingTransaction && (
+            <div className="bg-blue-100 border border-blue-300 rounded-lg p-3 mb-4">
+              <p className="text-sm font-bold text-blue-800">
+                ✏️ 編集モード: {editingTransaction.name} を編集中
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">項目</label>
@@ -574,9 +639,27 @@ export default function Home() {
               </div>
             </div>
           )}
-          <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-lg font-bold">
-            追加
-          </button>
+          <div className="flex gap-2">
+            {editingTransaction && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-bold hover:bg-slate-300 transition-colors"
+              >
+                キャンセル
+              </button>
+            )}
+            <button 
+              type="submit" 
+              className={`flex-1 py-3 rounded-lg font-bold transition-colors ${
+                editingTransaction
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-slate-900 text-white hover:bg-slate-800'
+              }`}
+            >
+              {editingTransaction ? '更新 (Update)' : '追加 (Add)'}
+            </button>
+          </div>
         </form>
 
         <div className="space-y-3">
@@ -601,26 +684,48 @@ export default function Home() {
                   </>
                 )}
               </div>
-              <button
-                onClick={() => handleDeleteItem(item.id)}
-                className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                aria-label="削除"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleEditItem(item)}
+                  className="text-blue-500 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                  aria-label="編集"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => handleDeleteItem(item.id)}
+                  className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                  aria-label="削除"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))}
         </div>
