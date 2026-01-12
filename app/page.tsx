@@ -1,5 +1,14 @@
 'use client';
 
+/**
+ * データベースマイグレーション（Supabase SQL Editorで実行してください）:
+ * 
+ * ALTER TABLE transactions 
+ * ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'cash';
+ * 
+ * 注意: 既存のレコードには 'cash' がデフォルトで設定されます。
+ */
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -22,6 +31,7 @@ type TransactionDB = {
   frequency: 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   category?: 'consumption' | 'waste' | 'investment' | null;
   tag?: string | null;
+  payment_method?: string | null; // 決済方法（支払い手段）
   created_at?: string;
   user_id?: string;
 };
@@ -49,6 +59,7 @@ export default function Home() {
     frequency: 'one_time' as 'one_time' | 'daily' | 'weekly' | 'monthly' | 'yearly',
     category: 'consumption' as 'consumption' | 'waste' | 'investment' | null,
     tag: 'food' as string,
+    payment_method: 'credit' as string, // デフォルト: クレジットカード
     date: new Date().toISOString().split('T')[0],
   });
 
@@ -178,6 +189,7 @@ export default function Home() {
       frequency: 'one_time',
       category: 'consumption',
       tag: 'food',
+      payment_method: 'credit', // デフォルト: クレジットカード
       date: new Date().toISOString().split('T')[0],
     });
     setEditingTransaction(null);
@@ -193,6 +205,7 @@ export default function Home() {
       frequency: item.frequency,
       category: item.category || 'consumption',
       tag: item.tag || 'food',
+      payment_method: item.payment_method || 'credit',
       date: item.created_at 
         ? new Date(item.created_at).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
@@ -240,6 +253,13 @@ export default function Home() {
         updateData.tag = formData.tag;
       } else {
         updateData.tag = 'other';
+      }
+
+      // 決済方法を追加
+      if (formData.payment_method) {
+        updateData.payment_method = formData.payment_method;
+      } else {
+        updateData.payment_method = 'credit'; // デフォルト: クレカ
       }
 
       if (editingTransaction) {
@@ -360,7 +380,7 @@ export default function Home() {
         <LiquidTankBackground percentage={percentage} />
         
         {/* メインコンテンツ */}
-        <main className="max-w-4xl mx-auto space-y-6 relative z-10">
+        <main className="max-w-md md:max-w-7xl mx-auto space-y-6 relative z-10">
           {/* ヘッダー */}
           <header className="flex items-center justify-between px-6 py-4 bg-white/90 backdrop-blur-lg rounded-xl shadow-sm z-10 relative">
             <h1 className="text-xl font-black tracking-tighter text-cyan-600">
@@ -391,9 +411,9 @@ export default function Home() {
 
           {/* タンクビジュアル（サマリーエリア） */}
           <div className="bg-white/90 backdrop-blur-lg p-6 rounded-xl shadow-sm border border-slate-100">
-            <div className="flex flex-col items-center space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between md:space-x-8 space-y-4 md:space-y-0">
               {/* 円形の達成率表示 */}
-              <div className="relative w-48 h-48">
+              <div className="relative w-48 h-48 mx-auto md:mx-0">
                 <svg className="transform -rotate-90 w-48 h-48">
                   <circle
                     cx="96"
@@ -427,12 +447,12 @@ export default function Home() {
               </div>
 
               {/* 資産総額表示 */}
-              <div className="text-center space-y-2">
+              <div className="text-center md:text-left space-y-2 flex-1">
                 <p className="text-gray-500 text-sm font-medium">現在の資産総額</p>
                 <p className="text-4xl font-bold text-gray-800 tracking-tight">
                   ¥{currentAsset.toLocaleString()}
                 </p>
-                <div className="h-1 w-16 bg-gray-200 mx-auto rounded-full my-4"></div>
+                <div className="h-1 w-16 bg-gray-200 mx-auto md:mx-0 rounded-full my-4"></div>
                 <p className="text-gray-400 text-xs">
                   目標 ¥{targetAsset.toLocaleString()} まで <br/>
                   あと <span className="text-cyan-600 font-bold">¥{Math.max(0, targetAsset - currentAsset).toLocaleString()}</span>
@@ -470,7 +490,7 @@ export default function Home() {
           {/* メインコンテンツ（スクロール可能） */}
           <div className="space-y-6 pb-8">
             {tabMode === 'dashboard' ? (
-              <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* 入力フォーム */}
                 <div className="bg-white/90 backdrop-blur-lg p-6 rounded-xl shadow-sm border border-slate-100">
                   <h2 className="text-lg font-bold text-slate-800 mb-4">
@@ -641,6 +661,32 @@ export default function Home() {
                         ))}
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                        支払い方法
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { value: 'credit', label: '💳 クレカ', name: 'Credit' },
+                          { value: 'pay', label: '📱 電子マネー', name: 'Pay' },
+                          { value: 'cash', label: '💵 現金', name: 'Cash' },
+                          { value: 'bank', label: '🏦 銀行', name: 'Bank' },
+                        ].map((method) => (
+                          <button
+                            key={method.value}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, payment_method: method.value })}
+                            className={`p-2 rounded-lg border-2 text-xs font-bold transition-colors ${
+                              formData.payment_method === method.value
+                                ? 'border-cyan-600 bg-cyan-50 text-cyan-700'
+                                : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300'
+                            }`}
+                          >
+                            {method.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       {editingTransaction && (
                         <button
@@ -686,6 +732,18 @@ export default function Home() {
                         };
                         const tagLabel = item.tag ? tagLabels[item.tag] || `❓ ${item.tag}` : '❓ その他';
                         
+                        // 決済方法のアイコン定義
+                        const paymentMethodIcons: Record<string, string> = {
+                          credit: '💳',
+                          pay: '📱',
+                          cash: '💵',
+                          bank: '🏦',
+                        };
+                        // 既存データ（null）への対応: デフォルトでクレカアイコンを表示
+                        const paymentIcon = item.payment_method 
+                          ? paymentMethodIcons[item.payment_method] || '💳'
+                          : '💳';
+                        
                         return (
                         <div key={item.id} className="bg-slate-50 p-4 rounded-lg flex justify-between items-center">
                           <div className="flex-1">
@@ -693,6 +751,9 @@ export default function Home() {
                               <p className="font-bold">{item.name}</p>
                               <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-full">
                                 {tagLabel}
+                              </span>
+                              <span className="text-lg" title={`支払い方法: ${item.payment_method || 'credit'}`}>
+                                {paymentIcon}
                               </span>
                             </div>
                             <p className="text-xs text-slate-400">
@@ -729,7 +790,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-              </>
+              </div>
             ) : (
               <>
                 {/* 分析画面 */}
